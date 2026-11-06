@@ -1,0 +1,1254 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Social Media Planner – Leco</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f5; color: #333; }
+
+.app { display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+
+.top-bar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 20px; background: #fff; border-bottom: 1px solid #e0e0e0;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+}
+.top-bar h1 { font-size: 18px; color: #e94560; }
+.top-bar .nav { display: flex; align-items: center; gap: 12px; }
+.top-bar .nav button {
+  background: #f0f0f0; border: 1px solid #ddd; color: #333; padding: 6px 14px;
+  border-radius: 6px; cursor: pointer; font-size: 14px;
+}
+.top-bar .nav button:hover { background: #e94560; color: #fff; border-color: #e94560; }
+.top-bar .nav .month-label { font-size: 16px; font-weight: 600; min-width: 160px; text-align: center; }
+.top-bar .settings-btn {
+  background: #f0f0f0; border: 1px solid #ddd; color: #333; padding: 6px 14px;
+  border-radius: 6px; cursor: pointer; font-size: 14px;
+}
+.top-bar .settings-btn:hover { background: #e94560; color: #fff; border-color: #e94560; }
+
+.calendar-wrapper { flex: 1; overflow: auto; padding: 10px; }
+
+.calendar-grid {
+  display: grid;
+  gap: 1px;
+  background: #ddd;
+  border-radius: 8px;
+  overflow: hidden;
+  min-width: fit-content;
+}
+
+.calendar-grid .header-corner {
+  background: #fff; padding: 8px; font-weight: 600; font-size: 13px; color: #666;
+  position: sticky; left: 0; z-index: 2; min-width: 150px;
+}
+.calendar-grid .header-day {
+  background: #fff; padding: 8px 4px; text-align: center; font-size: 12px;
+  min-width: 110px;
+}
+.calendar-grid .header-day .day-num { font-weight: 700; font-size: 16px; color: #333; text-align: center; }
+.calendar-grid .header-day .day-name { color: #555; font-size: 16px; text-align: center; }
+.calendar-grid .header-day.weekend { background: #fafafa; }
+.calendar-grid .header-day.weekend .day-name { color: #ccc; }
+.calendar-grid .header-day.today { border-bottom: 3px solid #e94560; background: #fff0f3; }
+.calendar-grid .week-corner {
+  background: #fff; position: sticky; left: 0; z-index: 2;
+  border-right: 2px solid #e0e0e0;
+}
+.calendar-grid .week-cell {
+  padding: 4px 6px; font-size: 12px; font-weight: 700; color: #555;
+  text-align: center; background: #f9f9f9; border-left: 2px solid #d0d0d0;
+}
+.calendar-grid .cell.today-col { background: #fff8f9; }
+.calendar-grid .cell.today-col.weekend { background: #fff0f3; }
+
+.calendar-grid .client-label {
+  background: #fafafa; padding: 10px 12px; font-weight: 600; font-size: 13px;
+  position: sticky; left: 0; z-index: 1; min-width: 150px;
+  display: flex; align-items: center; gap: 6px;
+  border-right: 2px solid #e0e0e0;
+}
+.client-label .client-logo {
+  width: 28px; height: 28px; border-radius: 50%; flex-shrink: 0;
+  object-fit: cover; background: #eee; cursor: pointer;
+}
+.client-label .client-logo-placeholder {
+  width: 28px; height: 28px; border-radius: 50%; flex-shrink: 0;
+  background: #ddd; display: flex; align-items: center; justify-content: center;
+  font-size: 11px; color: #999; cursor: pointer;
+}
+.client-label .client-color {
+  width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0;
+}
+.client-label input[type=text] {
+  background: transparent; border: none; color: #333; font-size: 13px;
+  font-weight: 600; width: 100%; outline: none;
+}
+.client-label input[type=text]::placeholder { color: #bbb; }
+
+.calendar-grid .cell {
+  background: #fff; min-height: 80px; min-width: 110px; padding: 4px;
+  cursor: pointer; transition: background 0.15s; position: relative;
+  display: flex; flex-direction: column; gap: 3px;
+}
+.calendar-grid .cell:hover { background: #f0f4ff; }
+.calendar-grid .cell.weekend { background: #fafafa; }
+.calendar-grid .cell.weekend:hover { background: #f0f4ff; }
+.calendar-grid .cell.drag-over { background: #e0e8ff; outline: 2px dashed #e94560; outline-offset: -2px; }
+.cell .post-card[draggable=true] { cursor: grab; }
+.cell .post-card[draggable=true]:active { cursor: grabbing; }
+.cell .post-card.dragging { opacity: 0.4; }
+
+.cell .post-card {
+  border-radius: 6px; padding: 4px; font-size: 11px; min-height: 150px;
+  overflow: hidden;
+  display: flex; flex-direction: column; gap: 2px;
+  border-left: 3px solid #ccc;
+}
+.post-card .post-thumb {
+  width: 100%; height: 90px; object-fit: cover; border-radius: 4px;
+  background: #eee; display: block;
+}
+.post-card .post-title {
+  font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  color: #333;
+}
+.post-card .post-type-badge {
+  font-size: 10px; padding: 1px 5px; border-radius: 3px;
+  color: #fff; align-self: flex-start; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.post-card .post-url-icon {
+  font-size: 10px; color: #999; margin-top: 1px;
+}
+.post-card .post-url-icon a { color: #0ea5e9; text-decoration: none; }
+.post-card .post-url-icon a:hover { text-decoration: underline; }
+.cell .add-post-btn {
+  border: none; background: none; color: #ccc; font-size: 18px; cursor: pointer;
+  padding: 2px; align-self: center; line-height: 1;
+}
+.cell .add-post-btn:hover { color: #e94560; }
+
+/* Modal */
+.modal-overlay {
+  display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4);
+  z-index: 100; align-items: center; justify-content: center;
+}
+.modal-overlay.open { display: flex; }
+.modal {
+  background: #fff; border-radius: 12px; padding: 24px; width: 460px;
+  max-width: 90vw; max-height: 90vh; overflow-y: auto;
+  border: 1px solid #e0e0e0; box-shadow: 0 8px 30px rgba(0,0,0,0.15);
+  position: relative;
+}
+.modal .modal-close {
+  position: absolute; top: 12px; right: 12px; background: none; border: none;
+  font-size: 22px; color: #aaa; cursor: pointer; padding: 4px 8px; line-height: 1;
+}
+.modal .modal-close:hover { color: #333; }
+.modal h2 { margin-bottom: 16px; font-size: 18px; color: #e94560; padding-right: 30px; }
+.modal label { display: block; margin-bottom: 4px; font-size: 13px; color: #888; }
+.modal input[type=text], .modal input[type=url], .modal input[type=number], .modal select {
+  width: 100%; padding: 8px 10px; border-radius: 6px; border: 1px solid #ddd;
+  background: #fafafa; color: #333; font-size: 14px; margin-bottom: 12px;
+}
+.modal input:focus, .modal select:focus { border-color: #e94560; outline: none; background: #fff; }
+.modal .drop-zone {
+  border: 2px dashed #ddd; border-radius: 8px; padding: 20px;
+  text-align: center; color: #aaa; font-size: 13px; margin-bottom: 12px;
+  cursor: pointer; transition: border-color 0.2s;
+}
+.modal .drop-zone:hover, .modal .drop-zone.dragover { border-color: #e94560; color: #e94560; }
+.modal .drop-zone img {
+  max-width: 100%; max-height: 150px; border-radius: 6px; margin-top: 8px;
+}
+.modal .btn-row { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; }
+.modal .btn {
+  padding: 8px 18px; border-radius: 6px; border: none; cursor: pointer;
+  font-size: 14px; font-weight: 600;
+}
+.modal .btn-primary { background: #22c55e; color: #fff; }
+.modal .btn-primary:hover { background: #16a34a; }
+.modal .btn-secondary { background: #f0f0f0; color: #333; border: 1px solid #ddd; }
+.modal .btn-secondary:hover { background: #e0e0e0; }
+.modal .btn-danger { background: #dc2626; color: #fff; }
+.modal .btn-danger:hover { background: #b91c1c; }
+
+/* Settings modal */
+.settings-section { margin-bottom: 20px; }
+.settings-section h3 { font-size: 15px; margin-bottom: 8px; color: #e94560; }
+.settings-list { display: flex; flex-direction: column; gap: 4px; }
+.settings-item {
+  display: flex; align-items: center; gap: 6px; padding: 6px 8px;
+  background: #fafafa; border-radius: 6px; border: 1px solid #eee;
+}
+.settings-item input[type=text] {
+  flex: 1; background: transparent; border: none; color: #333;
+  font-size: 13px; outline: none; padding: 0; margin: 0;
+}
+.settings-item .color-pick {
+  width: 28px; height: 28px; border: 1px solid #ddd; border-radius: 4px;
+  cursor: pointer; background: transparent; padding: 0;
+}
+.settings-item .del-btn {
+  background: none; border: none; color: #ccc; cursor: pointer; font-size: 16px;
+  padding: 2px 6px;
+}
+.settings-item .del-btn:hover { color: #dc2626; }
+.settings-item .logo-pick {
+  width: 28px; height: 28px; border-radius: 50%; object-fit: cover; cursor: pointer;
+  background: #eee; border: 1px solid #ddd; flex-shrink: 0;
+}
+.add-btn {
+  margin-top: 6px; background: #f0f0f0; border: 1px solid #ddd; color: #333;
+  padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 13px;
+}
+.add-btn:hover { background: #e94560; color: #fff; border-color: #e94560; }
+
+.filter-bar {
+  display: flex; align-items: center; gap: 6px; padding: 0 20px 0 0;
+}
+.filter-bar span { font-size: 13px; color: #888; }
+.filter-chip {
+  padding: 4px 10px; border-radius: 12px; font-size: 12px; cursor: pointer;
+  border: 1px solid #ddd; background: #f0f0f0; color: #666;
+  transition: all 0.15s;
+}
+.filter-chip.active { color: #fff; border-color: transparent; }
+.filter-chip:hover { opacity: 0.85; }
+
+/* Login */
+.login-overlay {
+  position: fixed; inset: 0; background: #f5f5f5;
+  display: flex; align-items: center; justify-content: center; z-index: 999;
+}
+.login-box {
+  background: #fff; border-radius: 12px; padding: 36px 40px; width: 340px;
+  box-shadow: 0 8px 30px rgba(0,0,0,0.12); border: 1px solid #e0e0e0; text-align: center;
+}
+.login-box h2 { color: #e94560; margin-bottom: 6px; font-size: 20px; }
+.login-box p { color: #999; font-size: 13px; margin-bottom: 24px; }
+.login-box input {
+  width: 100%; padding: 10px 14px; border-radius: 8px; border: 1px solid #ddd;
+  font-size: 15px; margin-bottom: 12px; outline: none;
+}
+.login-box input:focus { border-color: #e94560; }
+.login-box button {
+  width: 100%; padding: 10px; border-radius: 8px; border: none;
+  background: #22c55e; color: #fff; font-size: 15px; font-weight: 600; cursor: pointer;
+}
+.login-box button:hover { background: #16a34a; }
+.login-box .error { color: #dc2626; font-size: 13px; margin-top: 8px; }
+
+/* Approval workflow */
+#postModal .modal { width: 620px; }
+.modal textarea {
+  width: 100%; padding: 8px 10px; border-radius: 6px; border: 1px solid #ddd;
+  background: #fafafa; color: #333; font-size: 14px; font-family: inherit;
+  resize: vertical; margin-bottom: 10px;
+}
+.modal textarea:focus { border-color: #e94560; outline: none; background: #fff; }
+.modal input:disabled, .modal select:disabled, .modal textarea:disabled {
+  background: #fff; color: #333; border-color: #eee; cursor: default;
+}
+.approval-section {
+  border: 1px solid #e5e5e5; border-radius: 10px; padding: 14px; margin-bottom: 14px;
+}
+.approval-section.approved { border-color: #86efac; background: #f6fef9; }
+.approval-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+.approval-head h3 { font-size: 15px; color: #333; }
+.approval-status { font-size: 12px; color: #999; }
+.approval-section.approved .approval-status { color: #16a34a; font-weight: 600; }
+.viewer-image { max-width: 100%; max-height: 260px; border-radius: 6px; display: block; margin-bottom: 10px; }
+.comment-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
+.comment {
+  padding: 6px 10px; border-radius: 8px; font-size: 13px; line-height: 1.4;
+  border-left: 3px solid; max-width: 90%; word-wrap: break-word;
+}
+.comment .comment-text { white-space: pre-wrap; }
+.comment .comment-meta { font-size: 11px; color: #888; margin-bottom: 2px; }
+.comment.editor { background: #eef6ff; border-color: #0ea5e9; align-self: flex-start; }
+.comment.viewer { background: #fff7ed; border-color: #f97316; align-self: flex-end; }
+.comment-form { display: flex; gap: 6px; align-items: flex-start; }
+.comment-form textarea { margin: 0; flex: 1; min-height: 38px; }
+.comment-form .btn-comment {
+  padding: 8px 12px; border-radius: 6px; border: 1px solid #ddd; background: #f0f0f0;
+  cursor: pointer; font-size: 13px; white-space: nowrap;
+}
+.comment-form .btn-comment:hover { background: #e0e0e0; }
+.btn-approve {
+  margin-top: 10px; width: 100%; padding: 8px; border-radius: 6px; font-size: 14px; font-weight: 600;
+  cursor: pointer; border: 1px solid #22c55e; background: #fff; color: #16a34a;
+}
+.btn-approve:hover { background: #f0fdf4; }
+.btn-approve.is-approved { background: #22c55e; color: #fff; }
+.btn-approve.is-approved:hover { background: #16a34a; }
+.post-card .post-status { display: flex; gap: 4px; font-size: 10px; color: #666; flex-wrap: wrap; }
+.post-card .post-status span { padding: 0 4px; border-radius: 3px; background: #f0f0f0; }
+.post-card .post-status span.ok { background: #dcfce7; color: #166534; }
+/* Vizuál + Text approval icons: 2x size, stacked */
+.post-card .post-status { flex-direction: column; align-items: flex-start; }
+.post-card .post-status span.status-icon { font-size: 20px; line-height: 1.2; }
+
+/* ---------- Mobile (≤ 760px): days stacked vertically as an agenda list ---------- */
+@media (max-width: 760px) {
+  .top-bar { flex-wrap: wrap; gap: 8px; padding: 10px 12px; }
+  .top-bar h1 { font-size: 16px; flex: 1 1 auto; }
+  .top-bar .nav { order: 3; flex: 1 1 100%; justify-content: space-between; gap: 6px; }
+  .top-bar .nav button { padding: 8px 10px; font-size: 13px; }
+  .top-bar .nav .month-label { min-width: 0; font-size: 15px; }
+  .top-bar .settings-btn { padding: 8px 10px; font-size: 13px; }
+  .top-bar .editor-only[title="Export dat"], .top-bar .editor-only[title="Import dat"] { display: none !important; }
+  .filter-bar {
+    order: 4; flex: 1 1 100%; padding: 0; overflow-x: auto; white-space: nowrap;
+    -webkit-overflow-scrolling: touch; padding-bottom: 2px;
+  }
+  .filter-chip { flex-shrink: 0; padding: 6px 12px; font-size: 13px; }
+
+  .calendar-wrapper { padding: 8px; }
+  /* Two columns: day label | that day's posts. Inline grid-template-columns is overridden. */
+  .calendar-grid { grid-template-columns: 64px 1fr !important; min-width: 0; }
+  .calendar-grid .header-day, .calendar-grid .cell { order: var(--mobile-order); min-width: 0; }
+  .calendar-grid .header-day {
+    display: flex; flex-direction: column; justify-content: center; padding: 8px 4px;
+  }
+  .calendar-grid .header-day.today { border-bottom: none; border-left: 3px solid #e94560; }
+  .calendar-grid .header-day .week-num { font-size: 10px; color: #999; }
+  .calendar-grid .cell { min-height: 56px; flex-direction: row; flex-wrap: wrap; align-items: flex-start; padding: 6px; }
+  .calendar-grid .cell:hover { background: #fff; }
+  .cell .post-card { flex: 1 1 140px; max-width: 100%; }
+  .cell .add-post-btn { align-self: center; font-size: 24px; padding: 4px 10px; }
+
+  /* Full-screen modal */
+  .modal-overlay { align-items: stretch; }
+  .modal, #postModal .modal { width: 100%; max-width: 100%; max-height: 100%; border-radius: 0; padding: 18px 14px; }
+  .modal input[type=text], .modal input[type=url], .modal select, .modal textarea { font-size: 16px; } /* no iOS zoom */
+  .comment { max-width: 100%; }
+  .login-box { width: calc(100% - 32px); padding: 28px 20px; }
+}
+
+/* Viewer badge */
+.viewer-badge {
+  background: #fef3c7; color: #92400e; font-size: 12px; padding: 4px 10px;
+  border-radius: 12px; border: 1px solid #fcd34d;
+}
+</style>
+</head>
+<body>
+<!-- Login -->
+<div class="login-overlay" id="loginOverlay">
+  <div class="login-box">
+    <h2>Social Media Planner</h2>
+    <p>Zadejte heslo pro přístup</p>
+    <input type="password" id="loginPassword" placeholder="Heslo" onkeydown="if(event.key==='Enter') doLogin()">
+    <button onclick="doLogin()">Přihlásit se</button>
+    <div class="error" id="loginError"></div>
+  </div>
+</div>
+
+<div class="app">
+  <div class="top-bar">
+    <h1>Social Media Planner</h1>
+    <div class="nav">
+      <button onclick="changeMonth(-1)">◀ Předchozí</button>
+      <span class="month-label" id="monthLabel"></span>
+      <button onclick="changeMonth(1)">Další ▶</button>
+      <button onclick="goToToday()">Dnes</button>
+    </div>
+    <div class="filter-bar" id="filterBar"></div>
+    <button class="settings-btn editor-only" onclick="exportData()" title="Export dat">💾 Export</button>
+    <button class="settings-btn editor-only" onclick="document.getElementById('importFile').click()" title="Import dat">📂 Import</button>
+    <input type="file" id="importFile" accept=".json" style="display:none" onchange="importData(event)">
+    <span id="viewerBadge" class="viewer-badge" style="display:none">👁 Režim schvalování</span>
+    <button class="settings-btn" id="settingsBtn" onclick="openSettings()">⚙ Nastavení</button>
+    <button class="settings-btn" onclick="doLogout()" title="Odhlásit">↩ Odhlásit</button>
+  </div>
+  <div class="calendar-wrapper">
+    <div class="calendar-grid" id="grid"></div>
+  </div>
+</div>
+
+<!-- Post modal -->
+<div class="modal-overlay" id="postModal">
+  <div class="modal">
+    <button class="modal-close" onclick="closePostModal()">✕</button>
+    <h2 id="postModalTitle">Nový příspěvek</h2>
+    <label>Název</label>
+    <input type="text" id="postName" class="editor-field" placeholder="Název příspěvku">
+    <label>Typ příspěvku</label>
+    <select id="postType" class="editor-field"></select>
+    <label>Odkaz na celý příspěvek (Google Drive)</label>
+    <input type="url" id="postDriveUrl" class="editor-field" placeholder="https://drive.google.com/...">
+    <div id="postDriveLink" style="margin-top:-8px; margin-bottom:12px; display:none;">
+      <a id="postDriveAnchor" href="#" target="_blank" rel="noopener" style="color:#0ea5e9; font-size:13px;">Otevřít na Google Drive ↗</a>
+    </div>
+
+    <!-- Visual part -->
+    <div class="approval-section" id="sectionVisual">
+      <div class="approval-head">
+        <h3>Vizuál</h3>
+        <span class="approval-status" id="statusVisual"></span>
+      </div>
+      <div class="drop-zone" id="dropZone">
+        Přetáhněte obrázek, klikněte pro výběr, nebo vložte ze schránky (Ctrl+V)
+        <input type="file" accept="image/*" id="fileInput" style="display:none">
+      </div>
+      <img id="viewerImage" class="viewer-image" style="display:none" alt="">
+      <div class="approval-thread" data-section="visual"></div>
+    </div>
+
+    <!-- Copy (text) part -->
+    <div class="approval-section" id="sectionCopy">
+      <div class="approval-head">
+        <h3>Text příspěvku</h3>
+        <span class="approval-status" id="statusCopy"></span>
+      </div>
+      <textarea id="postText" class="editor-field" rows="5" placeholder="Text příspěvku…"></textarea>
+      <div class="approval-thread" data-section="copy"></div>
+    </div>
+
+    <label>Odkaz na publikovaný příspěvek (Facebook / Instagram)</label>
+    <input type="url" id="postUrl" class="editor-field" placeholder="https://www.facebook.com/... nebo https://www.instagram.com/...">
+    <div id="postUrlLink" style="margin-top:-8px; margin-bottom:12px; display:none;">
+      <a id="postUrlAnchor" href="#" target="_blank" style="color:#0ea5e9; font-size:13px;">Otevřít příspěvek ↗</a>
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-danger editor-only" id="postDeleteBtn" onclick="deletePost()" style="margin-right:auto">Smazat</button>
+      <button class="btn btn-primary editor-only" onclick="savePost()">Uložit</button>
+    </div>
+  </div>
+</div>
+
+<!-- Settings modal -->
+<div class="modal-overlay" id="settingsModal">
+  <div class="modal" style="width:500px">
+    <button class="modal-close" onclick="closeSettings()">✕</button>
+    <h2>Nastavení</h2>
+    <div class="settings-section">
+      <h3>Klienti</h3>
+      <div class="settings-list" id="clientsList"></div>
+      <button class="add-btn" onclick="addClient()">+ Přidat klienta</button>
+    </div>
+    <div class="settings-section">
+      <h3>Typy příspěvků</h3>
+      <p style="font-size:12px; color:#999; margin-bottom:8px;">Každý typ má svou barvu, která se zobrazuje v kalendáři.</p>
+      <div class="settings-list" id="typesList"></div>
+      <button class="add-btn" onclick="addType()">+ Přidat typ</button>
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-primary" onclick="closeSettings()">Hotovo</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const SUPABASE_URL = 'https://oymtjphquydwchameipg.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im95bXRqcGhxdXlkd2NoYW1laXBnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM0MjI3NzQsImV4cCI6MjA5ODk5ODc3NH0.ZX2MRcfqfu9U1VoNaVENrkEDRbqPdoNYEo7YbO2ynDU';
+const PASS_EDITOR = 'moto';
+const PASS_VIEWER = 'tokoukas';
+const STATE_TABLE = 'leco_state'; // own table, fully separate from the original planner (planner_state)
+const STATE_ROW_ID = 'main';
+
+const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+let isViewer = false;
+
+function doLogin() {
+  const pw = document.getElementById('loginPassword').value;
+  if (pw === PASS_EDITOR) {
+    isViewer = false;
+    sessionStorage.setItem('spl-role', 'editor');
+    startApp();
+  } else if (pw === PASS_VIEWER) {
+    isViewer = true;
+    sessionStorage.setItem('spl-role', 'viewer');
+    startApp();
+  } else {
+    document.getElementById('loginError').textContent = 'Špatné heslo.';
+  }
+}
+
+function doLogout() {
+  sessionStorage.removeItem('spl-role');
+  location.reload();
+}
+
+function applyRole() {
+  const editEls = document.querySelectorAll('.editor-only');
+  editEls.forEach(el => el.style.display = isViewer ? 'none' : '');
+  document.getElementById('viewerBadge').style.display = isViewer ? 'inline-block' : 'none';
+  document.getElementById('settingsBtn').style.display = isViewer ? 'none' : '';
+}
+
+async function startApp() {
+  document.getElementById('loginOverlay').style.display = 'none';
+  applyRole();
+  try {
+    await loadFromSupabase();
+  } catch(e) {
+    console.error('Supabase load error:', e);
+  }
+  init();
+  subscribeRealtime();
+  if (!isViewer) checkBackupReminder();
+}
+
+async function loadFromSupabase() {
+  const { data, error } = await db.from(STATE_TABLE).select('data').eq('id', STATE_ROW_ID).single();
+  if (error || !data?.data || Object.keys(data.data).length === 0) {
+    const local = localStorage.getItem('social-planner-leco');
+    if (local) state = migrateState(JSON.parse(local));
+    return false;
+  }
+  state = migrateState(data.data);
+  try { localStorage.setItem('social-planner-leco', JSON.stringify(stateWithoutImages())); } catch(e) {}
+  return true;
+}
+
+async function saveToSupabase() {
+  const { error } = await db.from(STATE_TABLE).update({ data: state, updated_at: new Date().toISOString() }).eq('id', STATE_ROW_ID);
+  if (error) console.error('Supabase save error:', error);
+}
+
+function subscribeRealtime() {
+  db.channel('planner-leco').on('postgres_changes',
+    { event: 'UPDATE', schema: 'public', table: STATE_TABLE, filter: `id=eq.${STATE_ROW_ID}` },
+    async () => {
+      await loadFromSupabase();
+      render();
+      refreshOpenApprovals();
+    }).subscribe();
+}
+
+const MONTHS_CS = ['Leden','Únor','Březen','Duben','Květen','Červen','Červenec','Srpen','Září','Říjen','Listopad','Prosinec'];
+const DAYS_CS = ['Ne','Po','Út','St','Čt','Pá','So'];
+const TYPE_COLORS = ['#e94560','#0ea5e9','#22c55e','#f59e0b','#a855f7','#ec4899','#14b8a6','#f97316','#6366f1','#84cc16'];
+const CLIENT_COLORS = ['#e94560','#0ea5e9','#22c55e','#f59e0b','#a855f7','#ec4899','#14b8a6','#f97316'];
+
+let state = loadState();
+let currentYear, currentMonth;
+let editingPost = null; // { clientId, day, postIndex } — postIndex null = new
+let tempImage = null;
+let dragSource = null; // { key, index }
+let activeFilter = null;
+
+function defaultState() {
+  return {
+    clients: [
+      { id: uid(), name: 'Klient 1', color: CLIENT_COLORS[0], logo: null },
+    ],
+    postTypes: [
+      { id: uid(), name: 'Příspěvek', color: TYPE_COLORS[0] },
+      { id: uid(), name: 'Story', color: TYPE_COLORS[1] },
+      { id: uid(), name: 'Reel', color: TYPE_COLORS[2] },
+    ],
+    posts: {}
+  };
+}
+
+function getISOWeek(date) {
+  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7));
+  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+  return Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+}
+
+function uid() { return Math.random().toString(36).slice(2, 10); }
+
+function migrateState(parsed) {
+  parsed.postTypes.forEach((t, i) => {
+    if (!t.color) t.color = TYPE_COLORS[i % TYPE_COLORS.length];
+  });
+  parsed.clients.forEach(c => {
+    if (c.logo === undefined) c.logo = null;
+  });
+  Object.keys(parsed.posts).forEach(k => {
+    const v = parsed.posts[k];
+    if (!Array.isArray(v)) {
+      parsed.posts[k] = [v];
+    }
+    parsed.posts[k].forEach(normalizePost);
+  });
+  return parsed;
+}
+
+// Approval workflow: each post has two parts (visual + copy), each with its own comments & approval.
+function emptySection() { return { approved: false, approvedAt: null, comments: [] }; }
+
+function normalizePost(p) {
+  if (!p.id) p.id = uid();
+  if (p.driveUrl === undefined) p.driveUrl = '';
+  if (p.text === undefined) p.text = '';
+  ['visual', 'copy'].forEach(s => {
+    if (!p[s]) p[s] = emptySection();
+    if (!Array.isArray(p[s].comments)) p[s].comments = [];
+  });
+  return p;
+}
+
+function findPostById(postId) {
+  for (const key of Object.keys(state.posts)) {
+    const post = state.posts[key].find(p => p.id === postId);
+    if (post) return post;
+  }
+  return null;
+}
+
+function loadState() {
+  try {
+    const s = localStorage.getItem('social-planner-leco');
+    if (s) return migrateState(JSON.parse(s));
+  } catch(e) {}
+  return defaultState();
+}
+
+function stateWithoutImages() {
+  const copy = JSON.parse(JSON.stringify(state));
+  copy.clients.forEach(c => c.logo = null);
+  Object.values(copy.posts).forEach(posts => posts.forEach(p => p.image = null));
+  return copy;
+}
+
+function saveState() {
+  try {
+    localStorage.setItem('social-planner-leco', JSON.stringify(stateWithoutImages()));
+  } catch(e) {
+    // localStorage plný — ignoruj, data jsou v Supabase
+  }
+  saveToSupabase();
+}
+
+function cellKey(clientId, year, month, day) {
+  return `${clientId}_${year}-${String(month+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+}
+
+function getPosts(key) {
+  return state.posts[key] || [];
+}
+
+function init() {
+  const now = new Date();
+  currentYear = now.getFullYear();
+  currentMonth = now.getMonth();
+  goToToday(); // render + scroll to today's day (important on mobile, where days are stacked)
+}
+
+function changeMonth(delta) {
+  currentMonth += delta;
+  if (currentMonth < 0) { currentMonth = 11; currentYear--; }
+  if (currentMonth > 11) { currentMonth = 0; currentYear++; }
+  render();
+}
+
+function goToToday() {
+  const now = new Date();
+  currentYear = now.getFullYear();
+  currentMonth = now.getMonth();
+  render();
+  requestAnimationFrame(() => {
+    const todayCol = document.querySelector('.header-day.today');
+    if (todayCol) todayCol.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+  });
+}
+
+function renderFilters() {
+  const bar = document.getElementById('filterBar');
+  bar.innerHTML = '<span>Filtr:</span>';
+  const allChip = document.createElement('span');
+  allChip.className = 'filter-chip' + (activeFilter === null ? ' active' : '');
+  allChip.style.cssText = activeFilter === null ? 'background:#333;color:#fff;border-color:transparent;' : '';
+  allChip.textContent = 'Vše';
+  allChip.onclick = () => { activeFilter = null; render(); };
+  bar.appendChild(allChip);
+  state.postTypes.forEach(t => {
+    const chip = document.createElement('span');
+    chip.className = 'filter-chip' + (activeFilter === t.id ? ' active' : '');
+    chip.style.cssText = activeFilter === t.id ? `background:${t.color};color:#fff;` : '';
+    chip.textContent = t.name;
+    chip.onclick = () => { activeFilter = activeFilter === t.id ? null : t.id; render(); };
+    bar.appendChild(chip);
+  });
+}
+
+function render() {
+  const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
+  document.getElementById('monthLabel').textContent = `${MONTHS_CS[currentMonth]} ${currentYear}`;
+  renderFilters();
+
+  const grid = document.getElementById('grid');
+
+  const dayHasPost = new Array(daysInMonth + 1).fill(false);
+  state.clients.slice(0, 1).forEach(client => {
+    for (let d = 1; d <= daysInMonth; d++) {
+      const posts = getPosts(cellKey(client.id, currentYear, currentMonth, d));
+      const visible = posts.filter(p => activeFilter === null || p.typeId === activeFilter);
+      if (visible.length) dayHasPost[d] = true;
+    }
+  });
+  const colSizes = Array.from({length: daysInMonth}, (_, i) => dayHasPost[i+1] ? '110px' : '72px').join(' ');
+  // Single-client app: no "Klient" column, only day columns
+  grid.style.gridTemplateColumns = colSizes;
+  grid.innerHTML = '';
+
+  const today = new Date();
+  const isCurrentMonth = today.getFullYear() === currentYear && today.getMonth() === currentMonth;
+
+  // Day headers
+  for (let d = 1; d <= daysInMonth; d++) {
+    const date = new Date(currentYear, currentMonth, d);
+    const dow = date.getDay();
+    const hdr = document.createElement('div');
+    const isWeekend = dow === 0 || dow === 6;
+    const isToday = isCurrentMonth && today.getDate() === d;
+    hdr.className = 'header-day' + (isWeekend ? ' weekend' : '') + (isToday ? ' today' : '');
+    hdr.style.setProperty('--mobile-order', 2 * d); // mobile: day label, then its cell (see @media)
+    const showWeek = dow === 1 || d === 1;
+    const weekNum = showWeek ? getISOWeek(new Date(currentYear, currentMonth, d)) : '';
+    hdr.innerHTML = `<div class="week-num">${weekNum ? `T${weekNum}` : ''}</div><div class="day-name">${DAYS_CS[dow]}</div><div class="day-num">${d}</div>`;
+    grid.appendChild(hdr);
+  }
+
+  state.clients.slice(0, 1).forEach(client => {
+    const label = document.createElement('div');
+    label.className = 'client-label';
+    const logoClick = isViewer ? '' : `onclick="pickClientLogo('${client.id}')"`;
+    const logoHtml = client.logo
+      ? `<img class="client-logo" src="${client.logo}" ${logoClick} ${isViewer ? 'style="cursor:default"' : 'title="Změnit logo"'}>`
+      : (isViewer ? '' : `<span class="client-logo-placeholder" ${logoClick} title="Nahrát logo">+</span>`);
+    label.innerHTML = `${logoHtml}
+      <span class="client-color" style="background:${client.color}"></span>
+      <input type="text" value="${escHtml(client.name)}" placeholder="Název klienta" ${isViewer ? 'readonly' : ''}
+        onchange="renameClient('${client.id}', this.value)">`;
+    for (let d = 1; d <= daysInMonth; d++) {
+      const date = new Date(currentYear, currentMonth, d);
+      const dow = date.getDay();
+      const isWeekend = dow === 0 || dow === 6;
+      const cell = document.createElement('div');
+      const isTodayCol = isCurrentMonth && today.getDate() === d;
+      cell.className = 'cell' + (isWeekend ? ' weekend' : '') + (isTodayCol ? ' today-col' : '');
+      cell.dataset.client = client.id;
+      cell.dataset.day = d;
+      cell.style.setProperty('--mobile-order', 2 * d + 1);
+
+      if (!isViewer) cell.ondragover = (e) => { e.preventDefault(); cell.classList.add('drag-over'); };
+      cell.ondragleave = () => cell.classList.remove('drag-over');
+      cell.ondrop = (e) => {
+        e.preventDefault();
+        cell.classList.remove('drag-over');
+        if (!dragSource) return;
+        const srcKey = dragSource.key;
+        const srcIdx = dragSource.index;
+        const destKey = cellKey(client.id, currentYear, currentMonth, d);
+        const srcPosts = getPosts(srcKey);
+        const post = srcPosts[srcIdx];
+        if (!post) return;
+        srcPosts.splice(srcIdx, 1);
+        if (!srcPosts.length) delete state.posts[srcKey];
+        else state.posts[srcKey] = srcPosts;
+        if (!state.posts[destKey]) state.posts[destKey] = [];
+        state.posts[destKey].push(post);
+        dragSource = null;
+        saveState();
+        render();
+      };
+
+      const key = cellKey(client.id, currentYear, currentMonth, d);
+      const posts = getPosts(key);
+      const visible = posts.map((p, i) => ({...p, _idx: i})).filter(p => activeFilter === null || p.typeId === activeFilter);
+
+      visible.forEach(post => {
+        const type = state.postTypes.find(t => t.id === post.typeId);
+        const typeName = type?.name || '';
+        const typeColor = type?.color || '#ccc';
+        let thumbHtml = post.image ? `<img class="post-thumb" src="${post.image}">` : '';
+        let urlHtml = '';
+        if (post.url) {
+          const platform = post.url.includes('instagram') ? '📷' : post.url.includes('facebook') ? '📘' : '🔗';
+          urlHtml = `<div class="post-url-icon"><a href="${escHtml(post.url)}" target="_blank" onclick="event.stopPropagation()">${platform}</a></div>`;
+        }
+        const card = document.createElement('div');
+        card.className = 'post-card';
+        card.draggable = !isViewer;
+        const fullyApproved = post.visual.approved && post.copy.approved;
+        card.setAttribute('style', fullyApproved
+          ? 'border-left-color:#15803d; background:#86efac; box-shadow:inset 0 0 0 2px #22c55e;'
+          : `border-left-color:${typeColor}; background:${typeColor}11;`);
+        if (fullyApproved) card.title = 'Schváleno (vizuál i text)';
+        const commentCount = post.visual.comments.length + post.copy.comments.length;
+        const statusHtml = `<div class="post-status">
+            <span class="status-icon ${post.visual.approved ? 'ok' : ''}" title="Vizuál">🖼${post.visual.approved ? '✓' : ''}</span>
+            <span class="status-icon ${post.copy.approved ? 'ok' : ''}" title="Text">📝${post.copy.approved ? '✓' : ''}</span>
+            ${commentCount ? `<span title="Komentáře">💬${commentCount}</span>` : ''}
+          </div>`;
+        card.innerHTML = `${thumbHtml}
+          <div class="post-title">${escHtml(post.title)}</div>
+          ${typeName ? `<span class="post-type-badge" style="background:${typeColor}">${escHtml(typeName)}</span>` : ''}
+          ${statusHtml}
+          ${urlHtml}`;
+        const idx = post._idx;
+        card.onclick = (e) => { e.stopPropagation(); openPostModal(client.id, d, idx); };
+        card.ondragstart = (e) => {
+          dragSource = { key, index: idx };
+          card.classList.add('dragging');
+          e.dataTransfer.effectAllowed = 'move';
+        };
+        card.ondragend = () => { card.classList.remove('dragging'); dragSource = null; };
+        cell.appendChild(card);
+      });
+
+      if (!isViewer) {
+        const addBtn = document.createElement('button');
+        addBtn.className = 'add-post-btn';
+        addBtn.textContent = '+';
+        addBtn.title = 'Přidat příspěvek';
+        addBtn.onclick = (e) => { e.stopPropagation(); openPostModal(client.id, d, null); };
+        cell.appendChild(addBtn);
+      }
+
+      grid.appendChild(cell);
+    }
+  });
+}
+
+function escHtml(s) {
+  const d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+function renameClient(id, name) {
+  const c = state.clients.find(c => c.id === id);
+  if (c) { c.name = name; saveState(); }
+}
+
+function pickClientLogo(clientId) {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = 'image/*';
+  input.onchange = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const c = state.clients.find(c => c.id === clientId);
+      if (c) { c.logo = ev.target.result; saveState(); render(); }
+    };
+    reader.readAsDataURL(file);
+  };
+  input.click();
+}
+
+function updateUrlLink(url) {
+  const wrap = document.getElementById('postUrlLink');
+  const anchor = document.getElementById('postUrlAnchor');
+  if (url && (url.startsWith('http://') || url.startsWith('https://'))) {
+    anchor.href = url;
+    wrap.style.display = 'block';
+  } else {
+    wrap.style.display = 'none';
+  }
+}
+
+function updateDriveLink(url) {
+  const wrap = document.getElementById('postDriveLink');
+  const anchor = document.getElementById('postDriveAnchor');
+  if (url && (url.startsWith('http://') || url.startsWith('https://'))) {
+    anchor.href = url;
+    wrap.style.display = 'block';
+  } else {
+    wrap.style.display = 'none';
+  }
+}
+
+function openPostModal(clientId, day, postIndex) {
+  const key = cellKey(clientId, currentYear, currentMonth, day);
+  const posts = getPosts(key);
+  const post = postIndex !== null ? posts[postIndex] : null;
+  // postId identifies the post even if realtime updates reorder the array while the modal is open
+  editingPost = { clientId, day, postIndex, postId: post?.id || null };
+
+  document.getElementById('postName').value = post?.title || '';
+  document.getElementById('postUrl').value = post?.url || '';
+  updateUrlLink(post?.url || '');
+  document.getElementById('postUrl').oninput = (e) => updateUrlLink(e.target.value);
+  document.getElementById('postDriveUrl').value = post?.driveUrl || '';
+  updateDriveLink(post?.driveUrl || '');
+  document.getElementById('postDriveUrl').oninput = (e) => updateDriveLink(e.target.value);
+  document.getElementById('postText').value = post?.text || '';
+  tempImage = post?.image || null;
+
+  // Viewer: all post fields are read-only; only comments and approvals are interactive
+  document.querySelectorAll('#postModal .editor-field').forEach(el => el.disabled = isViewer);
+  document.getElementById('dropZone').style.display = isViewer ? 'none' : '';
+  const viewerImg = document.getElementById('viewerImage');
+  viewerImg.style.display = isViewer && tempImage ? 'block' : 'none';
+  if (isViewer && tempImage) viewerImg.src = tempImage;
+  renderApprovals();
+
+  const typeSelect = document.getElementById('postType');
+  typeSelect.innerHTML = '<option value="">— Vyberte typ —</option>' +
+    state.postTypes.map(t => `<option value="${t.id}" ${post?.typeId === t.id ? 'selected' : ''}>${escHtml(t.name)}</option>`).join('');
+
+  const dz = document.getElementById('dropZone');
+  if (tempImage) {
+    dz.innerHTML = `<img src="${tempImage}"><br>Klikněte pro změnu nebo Ctrl+V<input type="file" accept="image/*" id="fileInput" style="display:none">`;
+  } else {
+    dz.innerHTML = `Přetáhněte obrázek, klikněte pro výběr, nebo vložte ze schránky (Ctrl+V)<input type="file" accept="image/*" id="fileInput" style="display:none">`;
+  }
+  setupDropZone();
+
+  document.getElementById('postDeleteBtn').style.display = post && !isViewer ? 'inline-block' : 'none';
+  document.getElementById('postModalTitle').textContent = isViewer ? (post?.title || 'Příspěvek') : (post ? 'Upravit příspěvek' : 'Nový příspěvek');
+  const overlay = document.getElementById('postModal');
+  overlay.classList.add('open');
+  overlay.onclick = (e) => { if (e.target === overlay) closePostModal(); };
+}
+
+function closePostModal() {
+  document.getElementById('postModal').classList.remove('open');
+  editingPost = null;
+  tempImage = null;
+}
+
+function savePost() {
+  if (!editingPost || isViewer) return;
+  const { clientId, day, postId } = editingPost;
+  const key = cellKey(clientId, currentYear, currentMonth, day);
+  const title = document.getElementById('postName').value.trim();
+  const typeId = document.getElementById('postType').value;
+  const url = document.getElementById('postUrl').value.trim();
+  const driveUrl = document.getElementById('postDriveUrl').value.trim();
+  const text = document.getElementById('postText').value;
+
+  const posts = getPosts(key);
+  const postIndex = postId ? posts.findIndex(p => p.id === postId) : -1;
+  const existing = postIndex >= 0 ? posts[postIndex] : null;
+  // Keep comments & approvals from the current state (they may have changed while the modal was open)
+  const postData = normalizePost({
+    id: existing?.id || uid(),
+    title, typeId, image: tempImage, url, driveUrl, text,
+    visual: existing?.visual, copy: existing?.copy,
+  });
+
+  if (!title && !typeId && !tempImage && !url && !driveUrl && !text.trim()) {
+    if (postIndex >= 0) {
+      posts.splice(postIndex, 1);
+      if (!posts.length) delete state.posts[key];
+      else state.posts[key] = posts;
+    }
+  } else if (postIndex >= 0) {
+    state.posts[key][postIndex] = postData;
+  } else {
+    if (!state.posts[key]) state.posts[key] = [];
+    state.posts[key].push(postData);
+  }
+  saveState();
+  closePostModal();
+  render();
+}
+
+// ---------- Approval workflow (comments + "Schváleno") ----------
+
+const SECTION_STATUS_ID = { visual: 'statusVisual', copy: 'statusCopy' };
+const SECTION_BOX_ID = { visual: 'sectionVisual', copy: 'sectionCopy' };
+const ROLE_LABEL = { editor: 'Editor', viewer: 'Klient' };
+
+function formatDateTime(iso) {
+  const d = new Date(iso);
+  return `${d.getDate()}. ${d.getMonth() + 1}. ${d.getFullYear()} ${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
+
+function renderApprovals() {
+  const post = editingPost?.postId ? findPostById(editingPost.postId) : null;
+  ['visual', 'copy'].forEach(section => {
+    const thread = document.querySelector(`#postModal .approval-thread[data-section="${section}"]`);
+    const box = document.getElementById(SECTION_BOX_ID[section]);
+    const status = document.getElementById(SECTION_STATUS_ID[section]);
+    if (!post) {
+      // New, unsaved post — comments need a stored post to attach to
+      box.classList.remove('approved');
+      status.textContent = '';
+      thread.innerHTML = '<p style="font-size:12px;color:#999;">Komentáře a schválení budou dostupné po uložení příspěvku.</p>';
+      return;
+    }
+    const data = post[section];
+    box.classList.toggle('approved', data.approved);
+    status.textContent = data.approved
+      ? `✓ Schváleno${data.approvedAt ? ' ' + formatDateTime(data.approvedAt) : ''}`
+      : 'Čeká na schválení';
+
+    // Preserve a half-written comment when the thread re-renders (e.g. realtime update)
+    const draft = thread.querySelector('textarea')?.value || '';
+    const comments = data.comments.map(c => `
+      <div class="comment ${c.role === 'viewer' ? 'viewer' : 'editor'}">
+        <div class="comment-meta">${ROLE_LABEL[c.role] || c.role} · ${formatDateTime(c.at)}</div><div class="comment-text">${escHtml(c.text)}</div>
+      </div>`).join('');
+    thread.innerHTML = `
+      <div class="comment-list">${comments}</div>
+      <div class="comment-form">
+        <textarea rows="1" placeholder="Napsat komentář…"></textarea>
+        <button type="button" class="btn-comment">Odeslat</button>
+      </div>
+      <button type="button" class="btn-approve ${data.approved ? 'is-approved' : ''}">
+        ${data.approved ? '✓ Schváleno (kliknutím zrušíš)' : 'Schváleno'}
+      </button>`;
+    const ta = thread.querySelector('textarea');
+    ta.value = draft;
+    ta.onkeydown = (e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) addComment(section, ta); };
+    thread.querySelector('.btn-comment').onclick = () => addComment(section, ta);
+    thread.querySelector('.btn-approve').onclick = () => toggleApproval(section);
+  });
+}
+
+function refreshOpenApprovals() {
+  if (document.getElementById('postModal').classList.contains('open')) renderApprovals();
+}
+
+// Re-read the latest state before changing it, so we don't overwrite what others saved meanwhile.
+async function mutatePost(postId, fn) {
+  try {
+    // Only take the server copy if it loads; don't fall back to localStorage (it has no images)
+    const { data, error } = await db.from(STATE_TABLE).select('data').eq('id', STATE_ROW_ID).single();
+    if (!error && data?.data && Object.keys(data.data).length) state = migrateState(data.data);
+  } catch (e) { console.error(e); }
+  const post = findPostById(postId);
+  if (!post) { alert('Příspěvek mezitím někdo smazal.'); closePostModal(); render(); return; }
+  fn(post);
+  saveState();
+  render();
+  renderApprovals();
+}
+
+async function addComment(section, textarea) {
+  const text = textarea.value.trim();
+  if (!text || !editingPost?.postId) return;
+  textarea.value = '';
+  await mutatePost(editingPost.postId, post => {
+    post[section].comments.push({ role: isViewer ? 'viewer' : 'editor', text, at: new Date().toISOString() });
+  });
+}
+
+async function toggleApproval(section) {
+  if (!editingPost?.postId) return;
+  await mutatePost(editingPost.postId, post => {
+    const s = post[section];
+    s.approved = !s.approved;
+    s.approvedAt = s.approved ? new Date().toISOString() : null;
+  });
+}
+
+function deletePost() {
+  if (!editingPost || isViewer) return;
+  if (!confirm('Opravdu smazat tento příspěvek?')) return;
+  const { clientId, day, postId } = editingPost;
+  if (!postId) return;
+  const key = cellKey(clientId, currentYear, currentMonth, day);
+  const posts = getPosts(key);
+  const postIndex = posts.findIndex(p => p.id === postId);
+  if (postIndex < 0) return;
+  posts.splice(postIndex, 1);
+  if (!posts.length) delete state.posts[key];
+  else state.posts[key] = posts;
+  saveState();
+  closePostModal();
+  render();
+}
+
+function setupDropZone() {
+  const dz = document.getElementById('dropZone');
+  const fi = document.getElementById('fileInput');
+  dz.onclick = () => fi.click();
+  fi.onchange = (e) => { if (e.target.files[0]) readFile(e.target.files[0]); };
+  dz.ondragover = (e) => { e.preventDefault(); dz.classList.add('dragover'); };
+  dz.ondragleave = () => dz.classList.remove('dragover');
+  dz.ondrop = (e) => {
+    e.preventDefault();
+    dz.classList.remove('dragover');
+    if (e.dataTransfer.files[0]) readFile(e.dataTransfer.files[0]);
+  };
+}
+
+function readFile(file) {
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    compressImage(e.target.result, (compressed) => {
+      tempImage = compressed;
+      const dz = document.getElementById('dropZone');
+      dz.innerHTML = `<img src="${tempImage}"><br>Klikněte pro změnu nebo Ctrl+V<input type="file" accept="image/*" id="fileInput" style="display:none">`;
+      setupDropZone();
+    });
+  };
+  reader.readAsDataURL(file);
+}
+
+function compressImage(dataUrl, callback) {
+  const img = new Image();
+  img.onload = () => {
+    const MAX = 800;
+    let w = img.width, h = img.height;
+    if (w > MAX || h > MAX) {
+      if (w > h) { h = Math.round(h * MAX / w); w = MAX; }
+      else { w = Math.round(w * MAX / h); h = MAX; }
+    }
+    const canvas = document.createElement('canvas');
+    canvas.width = w; canvas.height = h;
+    canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+    callback(canvas.toDataURL('image/jpeg', 0.75));
+  };
+  img.src = dataUrl;
+}
+
+document.addEventListener('paste', (e) => {
+  if (isViewer || !document.getElementById('postModal').classList.contains('open')) return;
+  const items = e.clipboardData?.items;
+  if (!items) return;
+  for (const item of items) {
+    if (item.type.startsWith('image/')) {
+      e.preventDefault();
+      readFile(item.getAsFile());
+      return;
+    }
+  }
+});
+
+function openSettings() {
+  renderSettings();
+  document.getElementById('settingsModal').classList.add('open');
+}
+
+function closeSettings() {
+  document.getElementById('settingsModal').classList.remove('open');
+  saveState();
+  render();
+}
+
+function renderSettings() {
+  const cl = document.getElementById('clientsList');
+  cl.innerHTML = state.clients.map((c, i) => {
+    const logoSrc = c.logo || '';
+    const logoEl = logoSrc
+      ? `<img class="logo-pick" src="${logoSrc}" onclick="settingsPickLogo(${i})" title="Změnit logo">`
+      : `<span class="logo-pick" onclick="settingsPickLogo(${i})" title="Nahrát logo" style="display:inline-flex;align-items:center;justify-content:center;font-size:12px;color:#999;">+</span>`;
+    return `<div class="settings-item">
+      ${logoEl}
+      <input type="color" class="color-pick" value="${c.color}"
+        onchange="state.clients[${i}].color=this.value; saveState();">
+      <input type="text" value="${escHtml(c.name)}" onchange="state.clients[${i}].name=this.value; saveState();">
+      <button class="del-btn" onclick="removeClient(${i})">✕</button>
+    </div>`;
+  }).join('');
+
+  const tl = document.getElementById('typesList');
+  tl.innerHTML = state.postTypes.map((t, i) => `
+    <div class="settings-item">
+      <input type="color" class="color-pick" value="${t.color}"
+        onchange="state.postTypes[${i}].color=this.value; saveState();">
+      <input type="text" value="${escHtml(t.name)}" onchange="state.postTypes[${i}].name=this.value; saveState();">
+      <button class="del-btn" onclick="removeType(${i})">✕</button>
+    </div>
+  `).join('');
+}
+
+function settingsPickLogo(idx) {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = 'image/*';
+  input.onchange = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      state.clients[idx].logo = ev.target.result;
+      saveState();
+      renderSettings();
+    };
+    reader.readAsDataURL(file);
+  };
+  input.click();
+}
+
+function addClient() {
+  state.clients.push({ id: uid(), name: '', color: CLIENT_COLORS[state.clients.length % CLIENT_COLORS.length], logo: null });
+  saveState();
+  renderSettings();
+}
+
+function removeClient(i) {
+  const id = state.clients[i].id;
+  state.clients.splice(i, 1);
+  Object.keys(state.posts).forEach(k => { if (k.startsWith(id + '_')) delete state.posts[k]; });
+  saveState();
+  renderSettings();
+}
+
+function addType() {
+  state.postTypes.push({ id: uid(), name: '', color: TYPE_COLORS[state.postTypes.length % TYPE_COLORS.length] });
+  saveState();
+  renderSettings();
+}
+
+function removeType(i) {
+  state.postTypes.splice(i, 1);
+  saveState();
+  renderSettings();
+}
+
+function exportData() {
+  const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  const d = new Date();
+  a.download = `social-planner-leco-backup-${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}.json`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+  localStorage.setItem('social-planner-leco-last-backup', Date.now().toString());
+}
+
+function importData(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    try {
+      const imported = JSON.parse(ev.target.result);
+      if (!imported.clients || !imported.postTypes || !imported.posts) {
+        alert('Neplatný soubor zálohy.');
+        return;
+      }
+      if (!confirm('Importem se přepíší všechna aktuální data. Pokračovat?')) return;
+      state = migrateState(imported);
+      saveState();
+      render();
+      alert('Data úspěšně importována.');
+    } catch(err) {
+      alert('Chyba při čtení souboru: ' + err.message);
+    }
+  };
+  reader.readAsText(file);
+  e.target.value = '';
+}
+
+function checkBackupReminder() {
+  const last = parseInt(localStorage.getItem('social-planner-leco-last-backup') || '0');
+  const daysSince = (Date.now() - last) / (1000 * 60 * 60 * 24);
+  if (daysSince >= 7) {
+    const bar = document.createElement('div');
+    bar.style.cssText = 'background:#fff3cd;color:#856404;padding:8px 20px;font-size:13px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #ffc107;';
+    bar.innerHTML = `<span>⚠ Poslední záloha dat je starší než 7 dní. Doporučujeme exportovat data.</span>
+      <span style="display:flex;gap:8px;">
+        <button onclick="exportData();this.closest('div').remove();" style="background:#ffc107;border:none;padding:4px 12px;border-radius:4px;cursor:pointer;font-size:12px;font-weight:600;">Zálohovat teď</button>
+        <button onclick="this.closest('div').remove()" style="background:none;border:1px solid #ccc;padding:4px 10px;border-radius:4px;cursor:pointer;font-size:12px;color:#888;">Později</button>
+      </span>`;
+    document.querySelector('.app').insertBefore(bar, document.querySelector('.app').children[1]);
+  }
+}
+
+// Auto-login from session
+const savedRole = sessionStorage.getItem('spl-role');
+if (savedRole === 'editor') { isViewer = false; startApp(); }
+else if (savedRole === 'viewer') { isViewer = true; startApp(); }
+else { document.getElementById('loginPassword').focus(); }
+</script>
+</body>
+</html>
